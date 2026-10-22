@@ -1,0 +1,259 @@
+# Ingestion configuration. Everything operative lives here, never in code.
+# Loaded by the backend at startup (JOBTOOL_INGEST_CONFIG). Paths are relative
+# to /app/config inside the container.
+
+# Role families and the keywords that place a posting into a family. Matching is
+# whole-word against the title first, then the head of the description.
+role_families:
+  - slug: backend
+    keywords:
+      - backend
+      - back-end
+      - back end
+      - api engineer
+      - server-side
+      - server side
+      - golang
+      - go developer
+      - django
+      - fastapi
+      - rails
+      - node.js
+      - java developer
+      - spring boot
+  - slug: ai_ml
+    keywords:
+      - machine learning
+      - ml engineer
+      - ai engineer
+      - artificial intelligence
+      - deep learning
+      - nlp
+      - natural language processing
+      - computer vision
+      - llm
+      - genai
+      - generative ai
+      - mlops
+      - data scientist
+  - slug: data
+    keywords:
+      - data engineer
+      - data analyst
+      - analytics engineer
+      - data platform
+      - etl
+      - data warehouse
+      - big data
+      - business intelligence
+      - dbt
+  - slug: frontend
+    keywords:
+      - frontend
+      - front-end
+      - front end
+      - ui engineer
+      - react developer
+      - vue developer
+      - angular developer
+      - web developer
+  - slug: fullstack
+    keywords:
+      - fullstack
+      - full-stack
+      - full stack
+    # A fullstack posting also matches a backend or frontend keyword; address
+    # that overlap here instead of in code.
+    also_matches: [backend, frontend]
+  - slug: devops
+    keywords:
+      - devops
+      - sre
+      - site reliability
+      - platform engineer
+      - infrastructure engineer
+      - cloud engineer
+      - kubernetes
+      - terraform
+  - slug: mobile
+    keywords:
+      - mobile engineer
+      - mobile developer
+      - ios
+      - android
+      - react native
+      - flutter
+      - swift developer
+      - kotlin developer
+  - slug: security
+    keywords:
+      - security engineer
+      - application security
+      - appsec
+      - penetration tester
+      - pen tester
+      - soc analyst
+      - security analyst
+      - infosec
+  - slug: qa
+    keywords:
+      - qa engineer
+      - quality assurance
+      - test automation
+      - automation tester
+      - sdet
+      - qa analyst
+      - test engineer
+
+# Tech gate: a posting must match one role family to be kept.
+gate:
+  enabled: true
+  # Characters of the description body examined when the title has no match.
+  # The whole body is never scanned: incidental mentions let unrelated
+  # postings through.
+  description_head_chars: 360
+  # Titles containing any of these are never classified from the description
+  # head alone, which stops non-engineering roles whose postings mention the
+  # stack. A title keyword match still wins over this list.
+  title_exclude_terms:
+    - customer success
+    - account manager
+    - account executive
+    - sales
+    - marketing
+    - recruiter
+    - talent
+    - people partner
+    - product manager
+    - project manager
+    - program manager
+    - business analyst
+    - support
+    - designer
+    - finance
+    - legal
+    - operations
+
+# English-language gate. A posting fails if a blocked phrase appears, or if
+# the English stopword ratio in the description head is below the minimum.
+language:
+  enabled: true
+  min_english_ratio: 0.12
+  head_chars: 1500
+  blocked_phrases:
+    - german required
+    - german fluency
+    - fluent german
+    - fluent in german
+    - deutschkenntnisse
+    - deutsch erforderlich
+    - fliessend deutsch
+    - fluent swedish
+    - swedish required
+    - svenska kravs
+    - fluent dutch
+    - dutch required
+    - nederlands vereist
+    - fluent french
+    - french required
+    - francais courant
+    - fluent spanish
+    - spanish required
+    - portuguese required
+    - conhecimento de portugues
+
+# Remote scope classification. Restricted wins over worldwide. CET and UK
+# timezone requirements are deliberately NOT restricted terms.
+remote_scope:
+  remote_terms: [remote, work from home, work from anywhere, distributed, anywhere]
+  worldwide_terms:
+    - worldwide
+    - anywhere
+    - global
+    - globally
+    - work from anywhere
+    - africa
+    - emea
+    - remote worldwide
+  restricted_patterns:
+    - '\\b(usa|us|united states|u\\.s\\.)\\s+only\\b'
+    - '\\bonly\\s+(us|u\\.s\\.|usa|united states)\\b'
+    - '\\b(usa|us|united states|u\\.s\\.)\\b[^.\\n]{0,60}\\bonly\\b'
+    - '\\bmust be\\s+(based|located|residing|living)\\s+in\\b'
+    - '\\bauthori[sz]ed to work in\\b'
+    - '\\bright to work in\\b'
+    - '\\beligible to work in\\b'
+    - '\\b(u\\.?s\\.?|u\\.?k\\.?|eu|canada|australia)\\s+citi[sz]ens?\\b'
+    - '\\b(est|edt|pst|pdt|cst|cdt|mst|mdt)\\b'
+    - '\\blatam\\b'
+    - '\\bcanada only\\b'
+    - '\\buk only\\b'
+    - '\\beu only\\b'
+
+# Source enablement and intervals. IntervalSeconds is the per-source schedule;
+# the scheduler enqueues a run when the previous one is older than this.
+sources:
+  ats:
+    greenhouse:
+      enabled: true
+      interval_seconds: 21600
+      slugs: [stripe, airbnb]
+    lever:
+      enabled: true
+      interval_seconds: 21600
+      slugs: []
+    ashby:
+      enabled: true
+      interval_seconds: 21600
+      slugs: [openai, linear, posthog, ramp, deel, tem]
+  remoteok:
+    enabled: true
+    interval_seconds: 7200
+  remotive:
+    enabled: true
+    interval_seconds: 10800
+    searches: [python, backend, data, machine learning, devops]
+  himalayas:
+    enabled: true
+    interval_seconds: 10800
+    max_pages: 15
+  jobicy:
+    enabled: true
+    interval_seconds: 7200
+    count: 50
+  weworkremotely:
+    enabled: true
+    interval_seconds: 7200
+  arbeitnow:
+    enabled: true
+    interval_seconds: 10800
+    max_pages: 5
+  workingnomads:
+    enabled: true
+    interval_seconds: 10800
+  pythonorg:
+    enabled: true
+    interval_seconds: 21600
+  hackernews:
+    enabled: true
+    interval_seconds: 21600
+    months_back: 2
+
+# Salary parsing hints for free-text ranges.
+salary:
+  currencies: [USD, EUR, GBP, NGN, CAD, AUD]
+
+# Seniority labels, ordered junior to principal. Used to normalise the
+# seniority field from titles and source-native labels.
+seniority:
+  levels:
+    - intern
+    - junior
+    - mid
+    - senior
+    - staff
+    - principal
+    - lead
+    - director
+    - executive
+
