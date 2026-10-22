@@ -12,20 +12,24 @@ import (
 
 func fullEnv() map[string]string {
 	return map[string]string{
-		"JOBTOOL_ROLE":                    "api",
-		"JOBTOOL_HTTP_ADDR":               ":8080",
-		"JOBTOOL_DATABASE_URL":            "postgres://jobtool:jobtool@postgres:5432/jobtool?sslmode=disable",
-		"JOBTOOL_LOG_LEVEL":               "info",
-		"JOBTOOL_WEB_ORIGIN":              "http://localhost:3000",
-		"JOBTOOL_ROLE_FAMILIES":           `[{"slug":"backend","keywords":["go","golang"]}]`,
-		"JOBTOOL_EMBEDDING_PROVIDER":      "local",
-		"JOBTOOL_EMBEDDING_MODEL":         "local-hash-v1",
-		"JOBTOOL_EMBEDDING_DIM":           "768",
-		"JOBTOOL_LLM_PROVIDER":            "none",
-		"JOBTOOL_LLM_TIMEOUT_S":           "30",
+		"JOBTOOL_ROLE":                     "api",
+		"JOBTOOL_HTTP_ADDR":                ":8080",
+		"JOBTOOL_DATABASE_URL":             "postgres://jobtool:jobtool@postgres:5432/jobtool?sslmode=disable",
+		"JOBTOOL_LOG_LEVEL":                "info",
+		"JOBTOOL_WEB_ORIGIN":               "http://localhost:3000",
+		"JOBTOOL_ROLE_FAMILIES":            `[{"slug":"backend","keywords":["go","golang"]}]`,
+		"JOBTOOL_EMBEDDING_PROVIDER":       "local",
+		"JOBTOOL_EMBEDDING_MODEL":          "local-hash-v1",
+		"JOBTOOL_EMBEDDING_DIM":            "768",
+		"JOBTOOL_LLM_PROVIDER":             "none",
+		"JOBTOOL_LLM_TIMEOUT_S":            "30",
 		"JOBTOOL_DIGEST_DEFAULT_FREQUENCY": "weekly",
-		"JOBTOOL_DIGEST_SEND_HOUR":        "8",
-		"JOBTOOL_SOURCES_TIMEOUT_S":       "30",
+		"JOBTOOL_DIGEST_SEND_HOUR":         "8",
+		"JOBTOOL_SOURCES_USER_AGENT":       "jobtool/test",
+		"JOBTOOL_SOURCES_TIMEOUT_S":        "30",
+		"JOBTOOL_INGEST_MIN_HOST_GAP_S":    "1",
+		"JOBTOOL_INGEST_RETRIES":           "2",
+		"JOBTOOL_INGEST_BACKOFF_S":         "2",
 	}
 }
 
@@ -54,8 +58,14 @@ func TestLoadRejects(t *testing.T) {
 		{name: "missing database url", mutate: func(m map[string]string) { delete(m, "JOBTOOL_DATABASE_URL") }},
 		{name: "bad role", mutate: func(m map[string]string) { m["JOBTOOL_ROLE"] = "cron" }},
 		{name: "bad dim", mutate: func(m map[string]string) { m["JOBTOOL_EMBEDDING_DIM"] = "zero" }},
-		{name: "llm without model", mutate: func(m map[string]string) { m["JOBTOOL_LLM_PROVIDER"] = "ollama"; m["JOBTOOL_LLM_BASE_URL"] = "http://ollama:11434" }},
-		{name: "llm without base url", mutate: func(m map[string]string) { m["JOBTOOL_LLM_PROVIDER"] = "openai_compatible"; m["JOBTOOL_LLM_MODEL"] = "m" }},
+		{name: "llm without model", mutate: func(m map[string]string) {
+			m["JOBTOOL_LLM_PROVIDER"] = "ollama"
+			m["JOBTOOL_LLM_BASE_URL"] = "http://ollama:11434"
+		}},
+		{name: "llm without base url", mutate: func(m map[string]string) {
+			m["JOBTOOL_LLM_PROVIDER"] = "openai_compatible"
+			m["JOBTOOL_LLM_MODEL"] = "m"
+		}},
 		{name: "bad json families", mutate: func(m map[string]string) { m["JOBTOOL_ROLE_FAMILIES"] = "backend" }},
 		{name: "send hour out of range", mutate: func(m map[string]string) { m["JOBTOOL_DIGEST_SEND_HOUR"] = "24" }},
 		{name: "bad frequency", mutate: func(m map[string]string) { m["JOBTOOL_DIGEST_DEFAULT_FREQUENCY"] = "hourly" }},
@@ -92,7 +102,10 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := NewHTTPHandler(log, "*", map[string]HealthChecker{"postgres": tt.check})
+			h := NewHTTPHandler(log, "*", []Route{{
+				Pattern: "GET /health",
+				Handler: HealthHandler(log, map[string]HealthChecker{"postgres": tt.check}),
+			}})
 			rec := httptest.NewRecorder()
 			h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
 			if rec.Code != tt.wantCode {
@@ -107,9 +120,12 @@ func TestHealthEndpoint(t *testing.T) {
 
 func TestHealthReportsDegraded(t *testing.T) {
 	log := slog.New(slog.NewJSONHandler(os.NewFile(0, os.DevNull), nil))
-	h := NewHTTPHandler(log, "*", map[string]HealthChecker{
-		"postgres": func(context.Context) error { return context.DeadlineExceeded },
-	})
+	h := NewHTTPHandler(log, "*", []Route{{
+		Pattern: "GET /health",
+		Handler: HealthHandler(log, map[string]HealthChecker{
+			"postgres": func(context.Context) error { return context.DeadlineExceeded },
+		}),
+	}})
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
 	if rec.Code != http.StatusServiceUnavailable {
@@ -119,3 +135,4 @@ func TestHealthReportsDegraded(t *testing.T) {
 		t.Fatalf("body = %s", rec.Body.String())
 	}
 }
+

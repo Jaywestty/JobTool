@@ -23,6 +23,7 @@ type Config struct {
 	LLM          LLM
 	Digest       Digest
 	Sources      Sources
+	Ingest       Ingest
 }
 
 type Embedding struct {
@@ -47,6 +48,15 @@ type Digest struct {
 type Sources struct {
 	UserAgent string
 	TimeoutS  int
+}
+
+// Ingest holds ingress settings for the ingestion pipeline.
+type Ingest struct {
+	ConfigPath   string
+	MinHostGapS  int
+	Retries      int
+	BackoffS     int
+	TriggerToken string
 }
 
 // RoleFamilies maps a role family slug to its keywords, in config order.
@@ -135,13 +145,13 @@ func load(getenv func(string) string, roleOverride string) (*Config, error) {
 	}
 
 	cfg := &Config{
-		AppEnv:      get("JOBTOOL_APP_ENV"),
-		Role:        role,
-		HTTPAddr:    required("JOBTOOL_HTTP_ADDR"),
-		DatabaseURL: required("JOBTOOL_DATABASE_URL"),
-		LogLevel:    enum("JOBTOOL_LOG_LEVEL", required("JOBTOOL_LOG_LEVEL"), map[string]bool{"debug": true, "info": true, "warn": true, "error": true}),
-		Migrations:  migrate,
-		WebOrigin:   required("JOBTOOL_WEB_ORIGIN"),
+		AppEnv:       get("JOBTOOL_APP_ENV"),
+		Role:         role,
+		HTTPAddr:     required("JOBTOOL_HTTP_ADDR"),
+		DatabaseURL:  required("JOBTOOL_DATABASE_URL"),
+		LogLevel:     enum("JOBTOOL_LOG_LEVEL", required("JOBTOOL_LOG_LEVEL"), map[string]bool{"debug": true, "info": true, "warn": true, "error": true}),
+		Migrations:   migrate,
+		WebOrigin:    required("JOBTOOL_WEB_ORIGIN"),
 		RoleFamilies: families,
 		Embedding: Embedding{
 			Provider: enum("JOBTOOL_EMBEDDING_PROVIDER", required("JOBTOOL_EMBEDDING_PROVIDER"), map[string]bool{"local": true, "openai_compatible": true}),
@@ -163,6 +173,20 @@ func load(getenv func(string) string, roleOverride string) (*Config, error) {
 			UserAgent: get("JOBTOOL_SOURCES_USER_AGENT"),
 			TimeoutS:  intIn("JOBTOOL_SOURCES_TIMEOUT_S", 1, 300),
 		},
+		Ingest: Ingest{
+			ConfigPath:   get("JOBTOOL_INGEST_CONFIG"),
+			MinHostGapS:  intIn("JOBTOOL_INGEST_MIN_HOST_GAP_S", 0, 60),
+			Retries:      intIn("JOBTOOL_INGEST_RETRIES", 0, 10),
+			BackoffS:     intIn("JOBTOOL_INGEST_BACKOFF_S", 0, 120),
+			TriggerToken: get("JOBTOOL_INGEST_TRIGGER_TOKEN"),
+		},
+	}
+
+	if cfg.Ingest.ConfigPath == "" {
+		cfg.Ingest.ConfigPath = "config/ingest.yaml"
+	}
+	if cfg.Sources.UserAgent == "" {
+		errs = append(errs, "JOBTOOL_SOURCES_USER_AGENT is required")
 	}
 
 	if cfg.LLM.Provider != "none" {
@@ -211,3 +235,4 @@ func parseRoleFamilies(raw string) (RoleFamilies, error) {
 	}
 	return families, nil
 }
+
