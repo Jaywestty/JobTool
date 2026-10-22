@@ -11,25 +11,31 @@ import (
 // HealthChecker reports whether a dependency is ready.
 type HealthChecker func(ctx context.Context) error
 
-// NewHTTPHandler builds the API mux. Routes use the Go 1.22 pattern mux.
-func NewHTTPHandler(log *slog.Logger, webOrigin string, checks map[string]HealthChecker) http.Handler {
+// Route is one method+pattern registration for the Go 1.22 pattern mux.
+type Route struct {
+	Pattern string
+	Handler http.HandlerFunc
+}
+
+// NewHTTPHandler builds the API mux from routes.
+func NewHTTPHandler(log *slog.Logger, webOrigin string, routes []Route) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", healthHandler(log, checks))
-	mux.HandleFunc("GET /api/health", healthHandler(log, checks))
+	for _, r := range routes {
+		mux.HandleFunc(r.Pattern, r.Handler)
+	}
 	return withCORS(webOrigin, withRequestLog(log, mux))
 }
 
-type healthStatus struct {
-	Status string            `json:"status"`
-	Checks map[string]string `json:"checks,omitempty"`
-}
-
-func healthHandler(log *slog.Logger, checks map[string]HealthChecker) http.HandlerFunc {
+// HealthHandler reports overall health from the named checks.
+func HealthHandler(log *slog.Logger, checks map[string]HealthChecker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
 
-		status := healthStatus{Status: "ok", Checks: map[string]string{}}
+		status := struct {
+			Status string            `json:"status"`
+			Checks map[string]string `json:"checks,omitempty"`
+		}{Status: "ok", Checks: map[string]string{}}
 		code := http.StatusOK
 		for name, check := range checks {
 			if err := check(ctx); err != nil {
@@ -41,11 +47,12 @@ func healthHandler(log *slog.Logger, checks map[string]HealthChecker) http.Handl
 			}
 			status.Checks[name] = "ok"
 		}
-		writeJSON(w, code, status)
+		WriteJSON(w, code, status)
 	}
 }
 
-func writeJSON(w http.ResponseWriter, code int, v any) {
+// WriteJSON writes a JSON response.
+func WriteJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
