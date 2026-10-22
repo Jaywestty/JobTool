@@ -26,10 +26,11 @@ type Task struct {
 
 // Task names are strings so new task kinds need no schema change.
 const (
-	TaskIngest  = "ingest"
-	TaskMatch   = "match_user"
-	TaskDigest  = "send_digest"
-	TaskEmbed   = "embed_jobs"
+	TaskIngest       = "ingest"
+	TaskIngestSource = "ingest_source"
+	TaskMatch        = "match_user"
+	TaskDigest       = "send_digest"
+	TaskEmbed        = "embed_jobs"
 )
 
 // Enqueue adds a task. A partial unique index on (kind, dedupe_key) means a
